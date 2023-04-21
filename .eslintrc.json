@@ -17,5 +17,5 @@
   },
   "plugins": ["@typescript-eslint"],
   "rules": {},
-  "ignorePatterns": ["tailwind.config.js"]
+  "ignorePatterns": ["*.config.js"]
 }

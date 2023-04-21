@@ -1,14 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh" data-theme="cupcake" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="ico" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/style.css" />
     <title>Qwerty Learner</title>
+    <script type="module" src="/src/main.ts" defer></script>
   </head>
 
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+  <body class="container mx-auto flex h-screen flex-col gap-20">
+    <header class="flex items-center justify-between">TODO</header>
+    <main
+      class="flex flex-1 flex-col items-center gap-20 outline-none"
+      tabindex="0"
+    >
+      <input
+        type="text"
+        id="word-input"
+        class="absolute h-0 w-0 opacity-0"
+        aria-label="word"
+      />
+      <h2
+        class="flex max-w-prose flex-1 flex-col justify-center text-center font-mono"
+        style="text-rendering: optimizeLegibility"
+      >
+        <dfn class="not-italic">
+          <ruby>
+            <span class="text-[5vw] text-primary" id="word">Cancel</span
+            ><rp>(</rp
+            ><rt class="text-[1vw] text-accent" id="pronounce">/ˈkænsəl/</rt
+            ><rp>)</rp>
+          </ruby>
+        </dfn>
+        <span class="text-[2vw] text-secondary" id="definition">取消</span>
+      </h2>
+
+      <ul class="stats shadow-lg" id="stats">
+        <li class="stat place-items-center" id="timing-stat">
+          <div class="stat-value">
+            <span class="countdown font-mono">
+              <span style="--value: 00"></span>:
+              <span style="--value: 00"></span>
+            </span>
+          </div>
+          <div class="stat-title">时间</div>
+        </li>
+      </ul>
+    </main>
+    <footer class="footer footer-center">TODO</footer>
   </body>
 </html>
