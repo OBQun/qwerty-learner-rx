@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" data-theme="cupcake" class="scroll-smooth">
+<html lang="zh" class="scroll-smooth">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="ico" href="/favicon.ico" />
@@ -10,7 +10,15 @@
   </head>
 
   <body class="container mx-auto flex h-screen flex-col gap-20">
-    <header class="flex items-center justify-between">TODO</header>
+    <header class="flex items-center justify-between p-6">
+      <h1>Qwerty Learner</h1>
+      <select
+        name="theme"
+        aria-label="theme"
+        data-choose-theme
+        class="select w-full max-w-xs"
+      ></select>
+    </header>
     <main
       class="flex flex-1 flex-col items-center gap-20 outline-none"
       tabindex="0"
@@ -27,13 +35,11 @@
       >
         <dfn class="not-italic">
           <ruby>
-            <span class="text-[5vw] text-primary" id="word">Cancel</span
-            ><rp>(</rp
-            ><rt class="text-[1vw] text-accent" id="pronounce">/ˈkænsəl/</rt
-            ><rp>)</rp>
+            <span class="text-[5vw] text-primary" id="word"></span><rp>(</rp
+            ><rt class="text-[1vw] text-accent" id="pronounce"></rt><rp>)</rp>
           </ruby>
         </dfn>
-        <span class="text-[2vw] text-secondary" id="definition">取消</span>
+        <span class="text-[2vw] text-secondary" id="definition"></span>
       </h2>
 
       <ul class="stats shadow-lg" id="stats">
@@ -48,6 +54,6 @@
         </li>
       </ul>
     </main>
-    <footer class="footer footer-center">TODO</footer>
+    <footer class="footer footer-center">Footer</footer>
   </body>
 </html>
