@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { filter, from, fromEvent, interval, scan } from "rxjs";
+import { filter, from, fromEvent, interval, of, retry, scan, tap } from "rxjs";
+import "./style-polyfill";
 
 import { setHighlightByDiff } from "./highlight";
-import "./style-polyfill";
-import { validateInput } from "./validate";
+import { stepByStep } from "./pipe";
 const mainEl = document.querySelector("main")!;
 const wordInputEl = document.querySelector<HTMLInputElement>("#word-input")!;
 const wordEl = document.querySelector<HTMLSpanElement>("#word")!;
@@ -33,17 +33,33 @@ inputSecond$.subscribe((sec) => {
   secondEl.style.setProperty("--value", (sec % 60) + "");
 });
 
-validateInput(word$, userInput$, (word, input) => {
-  if (!word.startsWith(input)) {
-    setTimeout(() => {
-      wordInputEl.value = "";
-      setHighlightByDiff(wordEl.firstChild as Node, "");
-    }, 200);
-  }
-  setHighlightByDiff(wordEl.firstChild as Node, input);
+const MAX_RETRY_COUNT = 5;
 
-  return input === word;
-}).subscribe((word) => {
+const validate = (currentWord: string) =>
+  userInput$.pipe(
+    tap((input) => {
+      setHighlightByDiff(wordEl.firstChild as Node, input);
+      if (!currentWord.startsWith(input)) throw input;
+    }),
+    retry({
+      delay(wrongInput, retryCount) {
+        if (retryCount > MAX_RETRY_COUNT) {
+          // TODO enable skip
+        }
+        console.error("wrong input: ", wrongInput);
+        // wrong input handle
+        setTimeout(() => {
+          wordInputEl.value = "";
+          setHighlightByDiff(wordEl.firstChild as Node, "");
+        }, 200);
+        return of(null);
+      },
+    }),
+    filter((input) => input === currentWord)
+  );
+
+word$.pipe(stepByStep(validate)).subscribe((word) => {
+  console.info("---current word:", `'${word}'`, "---");
   wordEl.innerText = word;
   wordInputEl.value = "";
   wordInputEl.maxLength = word.length;
