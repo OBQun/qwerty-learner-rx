@@ -21,7 +21,7 @@ export function setHighlightByDiff(node: Node, input: string) {
       }
     });
 
-  CSS.highlights
+  (<any>CSS).highlights
     .set(config.sameName, new Highlight(...sameRanges))
     .set(config.diffName, new Highlight(...diffRanges));
 }
