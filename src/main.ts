@@ -1,23 +1,13 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import {
-  Observable,
-  delayWhen,
-  first,
-  from,
-  fromEvent,
-  map,
-  of,
-  pairwise,
-  startWith,
-  switchMap,
-  tap,
-} from "rxjs";
-
+import { filter, from, fromEvent, interval, of, retry, scan, tap } from "rxjs";
 import "./style-polyfill";
+
+import { setHighlightByDiff } from "./highlight";
+import { stepByStep } from "./pipe";
 const mainEl = document.querySelector("main")!;
 const wordInputEl = document.querySelector<HTMLInputElement>("#word-input")!;
 const wordEl = document.querySelector<HTMLSpanElement>("#word")!;
-
+const statsEl = document.querySelector<HTMLUListElement>("#stats")!;
 fromEvent(mainEl, "focus").subscribe(() => {
   wordInputEl.focus();
 });
@@ -30,69 +20,47 @@ const userInput$ = fromEvent(
   ({ target }) => (<HTMLInputElement>target).value
 );
 
-userInput$.subscribe(console.log);
-
-const currentWord$: Observable<string> = word$.pipe(
-  startWith(""),
-  pairwise(),
-  delayWhen(([prev]) =>
-    prev
-      ? userInput$.pipe(
-          first((userInput) => userInput === prev),
-          map(() => 0)
-        )
-      : of(0)
-  ),
-  map(([, curr]) => curr)
+const inputSecond$ = interval(1000).pipe(
+  filter(() => wordInputEl === document.activeElement),
+  scan((acc) => acc + 1, 0)
 );
 
-currentWord$
-  .pipe(
-    tap((currentWord) => {
-      wordEl.innerText = currentWord;
+const timingCountdown = statsEl.querySelector(".countdown")!;
+const minuteEl = <HTMLElement>timingCountdown.children.item(0);
+const secondEl = <HTMLElement>timingCountdown.children.item(1);
+inputSecond$.subscribe((sec) => {
+  minuteEl.style.setProperty("--value", Math.floor(sec / 60) + "");
+  secondEl.style.setProperty("--value", (sec % 60) + "");
+});
+
+const MAX_RETRY_COUNT = 5;
+
+const validate = (currentWord: string) =>
+  userInput$.pipe(
+    tap((input) => {
+      setHighlightByDiff(wordEl.firstChild as Node, input);
+      if (!currentWord.startsWith(input)) throw input;
     }),
-    switchMap((currentWord) =>
-      userInput$.pipe(
-        map((userInput) =>
-          currentWord
-            .split("")
-            .map((char, i) => (userInput[i] ?? null) && char === userInput[i])
-        )
-      )
-    )
-  )
-  // to be optimize
-  .subscribe((charValidations) => {
-    CSS.highlights.clear();
-    const wordTextNode = wordEl.firstChild as Node;
-    const [successRanges, errorRanges, noneRanges] = charValidations.reduce<
-      [Range[], Range[], Range[]]
-    >(
-      (acc, charValidation, i) => {
-        const range = new Range();
-        range.setStart(wordTextNode, i);
-        range.setEnd(wordTextNode, i + 1);
-        switch (charValidation) {
-          case true:
-            acc[0].push(range);
-            break;
-          case false:
-            acc[1].push(range);
-            break;
-          case null:
-            acc[2].push(range);
-            break;
+    retry({
+      delay(wrongInput, retryCount) {
+        if (retryCount > MAX_RETRY_COUNT) {
+          // TODO enable skip
         }
-        return acc;
+        console.error("wrong input: ", wrongInput);
+        // wrong input handle
+        setTimeout(() => {
+          wordInputEl.value = "";
+          setHighlightByDiff(wordEl.firstChild as Node, "");
+        }, 200);
+        return of(null);
       },
-      [[], [], []]
-    );
-    CSS.highlights.set("char-right", new Highlight(...successRanges));
-    CSS.highlights.set("char-wrong", new Highlight(...errorRanges));
-    if (errorRanges.length) {
-      setTimeout(() => {
-        wordInputEl.value = "";
-        wordInputEl.dispatchEvent(new InputEvent("input"));
-      }, 200);
-    }
-  });
+    }),
+    filter((input) => input === currentWord)
+  );
+
+word$.pipe(stepByStep(validate)).subscribe((word) => {
+  console.info("---current word:", `'${word}'`, "---");
+  wordEl.innerText = word;
+  wordInputEl.value = "";
+  wordInputEl.maxLength = word.length;
+});
