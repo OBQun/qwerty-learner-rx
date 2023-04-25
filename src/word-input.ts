@@ -1,20 +1,20 @@
 import { Observable, filter, map, scan, startWith, switchMap, tap } from "rxjs";
 import { stepByStep } from "./pipe";
 
-type CompareFn = (word: string, input: string) => boolean;
+type CompareFn<T> = (word: T, input: string) => boolean;
 
-type WordInput = {
-  word: string;
+type WordInput<T> = {
+  word: T;
   input: string;
   wordCompletedCount: number;
 };
 
-export const getWordInput = (
-  word$: Observable<string>,
+export const getWordInput = <T>(
+  word$: Observable<T>,
   input$: Observable<string>,
-  onWordChange: (word: string) => void,
-  passFn: CompareFn = (word, input) => input === word
-): Observable<WordInput> =>
+  passFn: CompareFn<T>,
+  onWordChange?: (word: T) => void
+): Observable<WordInput<T>> =>
   word$.pipe(
     stepByStep((word) => input$.pipe(filter((input) => passFn(word, input)))),
     tap(onWordChange),
@@ -30,17 +30,10 @@ export const getWordInput = (
     )
   );
 
-const DEFAULT_INPUT_STAT = {
-  wrongWordStat: new Map<string, number>(),
-  rightInputCount: 0,
-  wrongInputCount: 0,
-  wordCompletedCount: 0,
-};
-
-export const getInputStat = (
-  wordInput$: Observable<WordInput>,
-  onInput?: (wordInput: WordInput & { valid: boolean }) => void,
-  validator: CompareFn = (word, input) => word.startsWith(input)
+export const getInputStat = <T>(
+  wordInput$: Observable<WordInput<T>>,
+  validator: CompareFn<T>,
+  onInput?: (wordInput: WordInput<T> & { valid: boolean }) => void
 ) =>
   wordInput$.pipe(
     map((value) => ({
@@ -48,13 +41,21 @@ export const getInputStat = (
       valid: validator(value.word, value.input),
     })),
     tap(onInput),
-    scan((acc, { word, valid, input }) => {
-      if (valid) {
-        if (input) acc.rightInputCount += 1;
-      } else {
-        acc.wrongInputCount += 1;
-        acc.wrongWordStat.set(word, (acc.wrongWordStat.get(word) ?? 0) + 1);
+    scan(
+      (acc, { word, valid, input }) => {
+        if (valid) {
+          if (input) acc.rightInputCount += 1;
+        } else {
+          acc.wrongInputCount += 1;
+          acc.wrongWordStat.set(word, (acc.wrongWordStat.get(word) ?? 0) + 1);
+        }
+        return acc;
+      },
+      {
+        wrongWordStat: new Map<T, number>(),
+        rightInputCount: 0,
+        wrongInputCount: 0,
+        wordCompletedCount: 0,
       }
-      return acc;
-    }, DEFAULT_INPUT_STAT)
+    )
   );

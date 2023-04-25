@@ -29,21 +29,30 @@ const userInput$ = fromEvent(
   ({ target }) => (<HTMLInputElement>target).value
 );
 
-const wordInput$ = getWordInput(word$, userInput$, (word) => {
-  wordEl.innerText = word;
-  wordInputEl.value = "";
-  wordInputEl.maxLength = word.length;
-});
-
-const inputStat$ = getInputStat(wordInput$, ({ valid, input }) => {
-  setHighlightByDiff(wordEl.firstChild as Node, input);
-  if (!valid) {
-    timer(200).subscribe(() => {
-      wordInputEl.value = "";
-      setHighlightByDiff(wordEl.firstChild as Node, "");
-    });
+const wordInput$ = getWordInput(
+  word$,
+  userInput$,
+  (word, input) => word === input,
+  (word) => {
+    wordEl.innerText = word;
+    wordInputEl.value = "";
+    wordInputEl.maxLength = word.length;
   }
-});
+);
+
+const inputStat$ = getInputStat(
+  wordInput$,
+  (word, input) => word.startsWith(input),
+  ({ valid, input }) => {
+    setHighlightByDiff(wordEl.firstChild as Node, input);
+    if (!valid) {
+      timer(200).subscribe(() => {
+        wordInputEl.value = "";
+        setHighlightByDiff(wordEl.firstChild as Node, "");
+      });
+    }
+  }
+);
 
 const timingCountdown = statsEl.querySelector(".countdown")!;
 const minuteEl = <HTMLElement>timingCountdown.children.item(0);
@@ -62,4 +71,6 @@ combineLatest([
       secondEl.style.setProperty("--value", (sec % 60) + "");
     })
   ),
-]).subscribe();
+]).subscribe(([inputStat]) => {
+  console.table(inputStat);
+});
