@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@property --count {
+  syntax: "<integer>";
+  initial-value: 0;
+  inherits: false;
+}

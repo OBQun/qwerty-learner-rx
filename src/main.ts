@@ -1,9 +1,18 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { filter, from, fromEvent, interval, of, retry, scan, tap } from "rxjs";
+import {
+  combineLatest,
+  filter,
+  from,
+  fromEvent,
+  interval,
+  map,
+  tap,
+  timer,
+} from "rxjs";
 import "./style-polyfill";
 
 import { setHighlightByDiff } from "./highlight";
-import { stepByStep } from "./pipe";
+import { getInputStat, getWordInput } from "./word-input";
 const mainEl = document.querySelector("main")!;
 const wordInputEl = document.querySelector<HTMLInputElement>("#word-input")!;
 const wordEl = document.querySelector<HTMLSpanElement>("#word")!;
@@ -20,47 +29,78 @@ const userInput$ = fromEvent(
   ({ target }) => (<HTMLInputElement>target).value
 );
 
-const inputSecond$ = interval(1000).pipe(
-  filter(() => wordInputEl === document.activeElement),
-  scan((acc) => acc + 1, 0)
+const wordInput$ = getWordInput(
+  word$,
+  userInput$,
+  (word, input) => word === input,
+  (word) => {
+    wordEl.innerText = word;
+    wordInputEl.value = "";
+    wordInputEl.maxLength = word.length;
+  }
 );
 
-const timingCountdown = statsEl.querySelector(".countdown")!;
+const inputStat$ = getInputStat(
+  wordInput$,
+  (word, input) => word.startsWith(input),
+  ({ valid, input }) => {
+    setHighlightByDiff(wordEl.firstChild as Node, input);
+    if (!valid) {
+      timer(200).subscribe(() => {
+        wordInputEl.value = "";
+        setHighlightByDiff(wordEl.firstChild as Node, "");
+      });
+    }
+  }
+);
+
+const timingCountdown = statsEl.querySelector("#time .countdown")!;
 const minuteEl = <HTMLElement>timingCountdown.children.item(0);
 const secondEl = <HTMLElement>timingCountdown.children.item(1);
-inputSecond$.subscribe((sec) => {
-  minuteEl.style.setProperty("--value", Math.floor(sec / 60) + "");
-  secondEl.style.setProperty("--value", (sec % 60) + "");
-});
+const inputCountCounterEl = statsEl.querySelector<HTMLElement>(
+  "#input-count .counter"
+)!;
+const correctCountCounterEl = statsEl.querySelector<HTMLElement>(
+  "#correct-count .counter"
+)!;
+const correctRateCounterEl = statsEl.querySelector<HTMLElement>(
+  "#correct-rate .counter"
+)!;
+const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
 
-const MAX_RETRY_COUNT = 5;
+const inputSecond$ = interval(1000).pipe(
+  filter(() => wordInputEl === document.activeElement),
+  map((_, i) => i)
+);
 
-const validate = (currentWord: string) =>
-  userInput$.pipe(
-    tap((input) => {
-      setHighlightByDiff(wordEl.firstChild as Node, input);
-      if (!currentWord.startsWith(input)) throw input;
-    }),
-    retry({
-      delay(wrongInput, retryCount) {
-        if (retryCount > MAX_RETRY_COUNT) {
-          // TODO enable skip
-        }
-        console.error("wrong input: ", wrongInput);
-        // wrong input handle
-        setTimeout(() => {
-          wordInputEl.value = "";
-          setHighlightByDiff(wordEl.firstChild as Node, "");
-        }, 200);
-        return of(null);
-      },
-    }),
-    filter((input) => input === currentWord)
+combineLatest([
+  inputStat$.pipe(
+    tap(({ incorrectInputCount, correctInputCount }) => {
+      inputCountCounterEl.style.setProperty(
+        "--count",
+        incorrectInputCount + correctInputCount + ""
+      );
+      correctCountCounterEl.style.setProperty(
+        "--count",
+        correctInputCount + ""
+      );
+      correctRateCounterEl.style.setProperty(
+        "--count",
+        Math.floor(
+          (correctInputCount / (correctInputCount + incorrectInputCount)) * 100
+        ) + ""
+      );
+    })
+  ),
+  inputSecond$.pipe(
+    tap((sec) => {
+      minuteEl.style.setProperty("--value", Math.floor(sec / 60) + "");
+      secondEl.style.setProperty("--value", (sec % 60) + "");
+    })
+  ),
+]).subscribe(([{ correctInputCount }, sec]) => {
+  wpmCounterEl.style.setProperty(
+    "--count",
+    Math.floor(correctInputCount / 5 / ((sec + 0.5) / 60)) + ""
   );
-
-word$.pipe(stepByStep(validate)).subscribe((word) => {
-  console.info("---current word:", `'${word}'`, "---");
-  wordEl.innerText = word;
-  wordInputEl.value = "";
-  wordInputEl.maxLength = word.length;
 });
