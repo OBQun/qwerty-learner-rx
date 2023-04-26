@@ -43,14 +43,38 @@
       </h2>
 
       <ul class="stats shadow-lg" id="stats">
-        <li class="stat place-items-center" id="timing-stat">
-          <div class="stat-value">
-            <span class="countdown font-mono">
+        <li class="stat place-items-center" id="time">
+          <div class="stat-value font-mono">
+            <span class="countdown">
               <span style="--value: 00"></span>:
               <span style="--value: 00"></span>
             </span>
           </div>
           <div class="stat-title">时间</div>
+        </li>
+        <li class="stat place-items-center" id="input-count">
+          <div class="stat-value font-mono">
+            <span style="--value: 100"></span>
+          </div>
+          <div class="stat-title">输入数</div>
+        </li>
+        <li class="stat place-items-center" id="wpm">
+          <div class="stat-value font-mono">
+            <span style="--value: 00"></span>
+          </div>
+          <div class="stat-title">WPM</div>
+        </li>
+        <li class="stat place-items-center" id="correct-count">
+          <div class="stat-value font-mono">
+            <span style="--value: 00"></span>
+          </div>
+          <div class="stat-title">正确数</div>
+        </li>
+        <li class="stat place-items-center" id="correct-rate">
+          <div class="stat-value font-mono">
+            <span style="--value: 00"></span>
+          </div>
+          <div class="stat-title">正确率</div>
         </li>
       </ul>
     </main>

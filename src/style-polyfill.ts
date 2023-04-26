@@ -53,10 +53,10 @@ fromEvent(themeSelectEl, "change")
   .pipe(startWith(null))
   .subscribe(() => {
     sheet.replace(`
-    #word::highlight(right) {
+    #word::highlight(correct) {
       color: hsl(${rootStyles.getPropertyValue("--su")});
     }
-    #word::highlight(wrong) {
+    #word::highlight(incorrect) {
       color: hsl(${rootStyles.getPropertyValue("--er")} );
     }
     `);

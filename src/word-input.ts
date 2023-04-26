@@ -44,17 +44,20 @@ export const getInputStat = <T>(
     scan(
       (acc, { word, valid, input }) => {
         if (valid) {
-          if (input) acc.rightInputCount += 1;
+          if (input) acc.correctInputCount += 1;
         } else {
-          acc.wrongInputCount += 1;
-          acc.wrongWordStat.set(word, (acc.wrongWordStat.get(word) ?? 0) + 1);
+          acc.incorrectInputCount += 1;
+          acc.incorrectWordStat.set(
+            word,
+            (acc.incorrectWordStat.get(word) ?? 0) + 1
+          );
         }
         return acc;
       },
       {
-        wrongWordStat: new Map<T, number>(),
-        rightInputCount: 0,
-        wrongInputCount: 0,
+        incorrectWordStat: new Map<T, number>(),
+        correctInputCount: 0,
+        incorrectInputCount: 0,
         wordCompletedCount: 0,
       }
     )

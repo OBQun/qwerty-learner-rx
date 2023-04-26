@@ -1,6 +1,6 @@
 export const config = {
-  sameName: "right",
-  diffName: "wrong",
+  sameName: "correct",
+  diffName: "incorrect",
 };
 
 const highlights: Map<string, Highlight> = (<any>CSS).highlights;
