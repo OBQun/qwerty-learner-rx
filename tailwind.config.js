@@ -4,5 +4,18 @@ module.exports = {
   theme: {
     extend: {},
   },
-  plugins: [require("daisyui")],
+  plugins: [
+    require("daisyui"),
+    function ({ addComponents }) {
+      addComponents({
+        ".counter": {
+          transition: "--count 0.3s",
+          "counter-set": "num calc(var(--count))",
+          "&::before": {
+            content: "counter(num)",
+          },
+        },
+      });
+    },
+  ],
 };

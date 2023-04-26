@@ -54,9 +54,19 @@ const inputStat$ = getInputStat(
   }
 );
 
-const timingCountdown = statsEl.querySelector(".countdown")!;
+const timingCountdown = statsEl.querySelector("#time .countdown")!;
 const minuteEl = <HTMLElement>timingCountdown.children.item(0);
 const secondEl = <HTMLElement>timingCountdown.children.item(1);
+const inputCountCounterEl = statsEl.querySelector<HTMLElement>(
+  "#input-count .counter"
+)!;
+const correctCountCounterEl = statsEl.querySelector<HTMLElement>(
+  "#correct-count .counter"
+)!;
+const correctRateCounterEl = statsEl.querySelector<HTMLElement>(
+  "#correct-rate .counter"
+)!;
+const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
 
 const inputSecond$ = interval(1000).pipe(
   filter(() => wordInputEl === document.activeElement),
@@ -64,13 +74,33 @@ const inputSecond$ = interval(1000).pipe(
 );
 
 combineLatest([
-  inputStat$,
+  inputStat$.pipe(
+    tap(({ incorrectInputCount, correctInputCount }) => {
+      inputCountCounterEl.style.setProperty(
+        "--count",
+        incorrectInputCount + correctInputCount + ""
+      );
+      correctCountCounterEl.style.setProperty(
+        "--count",
+        correctInputCount + ""
+      );
+      correctRateCounterEl.style.setProperty(
+        "--count",
+        Math.floor(
+          (correctInputCount / (correctInputCount + incorrectInputCount)) * 100
+        ) + ""
+      );
+    })
+  ),
   inputSecond$.pipe(
     tap((sec) => {
       minuteEl.style.setProperty("--value", Math.floor(sec / 60) + "");
       secondEl.style.setProperty("--value", (sec % 60) + "");
     })
   ),
-]).subscribe(([inputStat]) => {
-  console.table(inputStat);
+]).subscribe(([{ correctInputCount }, sec]) => {
+  wpmCounterEl.style.setProperty(
+    "--count",
+    Math.floor(correctInputCount / 5 / ((sec + 0.5) / 60)) + ""
+  );
 });
