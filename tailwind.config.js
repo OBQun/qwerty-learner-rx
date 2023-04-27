@@ -6,7 +6,14 @@ module.exports = {
   },
   plugins: [
     require("daisyui"),
-    function ({ addComponents }) {
+    function ({ addComponents, addBase }) {
+      addBase({
+        "@property --count": {
+          syntax: '"<integer>"',
+          "initial-value": "0",
+          inherits: "false",
+        },
+      });
       addComponents({
         ".counter": {
           transition: "--count 0.3s",

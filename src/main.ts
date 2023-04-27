@@ -76,19 +76,15 @@ const inputSecond$ = interval(1000).pipe(
 combineLatest([
   inputStat$.pipe(
     tap(({ incorrectInputCount, correctInputCount }) => {
-      inputCountCounterEl.style.setProperty(
-        "--count",
-        incorrectInputCount + correctInputCount + ""
-      );
+      const totalInputCount = incorrectInputCount + correctInputCount;
+      inputCountCounterEl.style.setProperty("--count", totalInputCount + "");
       correctCountCounterEl.style.setProperty(
         "--count",
         correctInputCount + ""
       );
       correctRateCounterEl.style.setProperty(
         "--count",
-        Math.floor(
-          (correctInputCount / (correctInputCount + incorrectInputCount)) * 100
-        ) + ""
+        Math.floor((correctInputCount / totalInputCount) * 100) + ""
       );
     })
   ),

@@ -16,17 +16,17 @@
     "eslint": "^8.39.0",
     "eslint-plugin-rxjs": "^5.0.3",
     "husky": "^8.0.3",
-    "lint-staged": "^13.2.1",
+    "lint-staged": "^13.2.2",
     "postcss": "^8.4.23",
     "prettier": "^2.8.8",
     "prettier-plugin-tailwindcss": "^0.2.7",
     "tailwindcss": "^3.3.2",
     "typescript": "^5.0.4",
-    "vite": "^4.3.2"
+    "vite": "^4.3.3"
   },
   "dependencies": {
     "daisyui": "^2.51.6",
-    "rxjs": "^7.8.0",
+    "rxjs": "^7.8.1",
     "theme-change": "^2.5.0"
   }
 }
