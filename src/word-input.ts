@@ -1,4 +1,13 @@
-import { Observable, filter, map, scan, startWith, switchMap, tap } from "rxjs";
+import {
+  Observable,
+  filter,
+  map,
+  pairwise,
+  scan,
+  startWith,
+  switchMap,
+  tap,
+} from "rxjs";
 import { stepByStep } from "./pipe";
 
 type CompareFn<T> = (word: T, input: string) => boolean;
@@ -32,33 +41,45 @@ export const getWordInput = <T>(
 
 export const getInputStat = <T>(
   wordInput$: Observable<WordInput<T>>,
-  validator: CompareFn<T>,
-  onInput?: (wordInput: WordInput<T> & { valid: boolean }) => void
+  {
+    validator,
+    onInput,
+  }: {
+    validator: CompareFn<T>;
+    onInput?: (
+      wordInput: WordInput<T> & { valid: boolean; isBackspace: boolean }
+    ) => void;
+  }
 ) =>
   wordInput$.pipe(
-    map((value) => ({
-      ...value,
-      valid: validator(value.word, value.input),
+    pairwise(),
+    map(([prev, curr]) => ({
+      ...curr,
+      valid: validator(curr.word, curr.input),
+      isBackspace: prev.input.length > curr.input.length,
     })),
     tap(onInput),
     scan(
-      (acc, { word, valid, input }) => {
+      (acc, { valid, input, isBackspace, wordCompletedCount }) => {
         if (valid) {
-          if (input) acc.correctInputCount += 1;
+          if (isBackspace) {
+            acc.backspaceCount += 1;
+          } else {
+            if (input) {
+              acc.correctInputCount += 1;
+            }
+          }
         } else {
           acc.incorrectInputCount += 1;
-          acc.incorrectWordStat.set(
-            word,
-            (acc.incorrectWordStat.get(word) ?? 0) + 1
-          );
         }
+        acc.wordCompletedCount = wordCompletedCount;
         return acc;
       },
       {
-        incorrectWordStat: new Map<T, number>(),
         correctInputCount: 0,
         incorrectInputCount: 0,
         wordCompletedCount: 0,
+        backspaceCount: 0,
       }
     )
   );
