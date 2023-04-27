@@ -40,19 +40,19 @@ const wordInput$ = getWordInput(
   }
 );
 
-const inputStat$ = getInputStat(
-  wordInput$,
-  (word, input) => word.startsWith(input),
-  ({ valid, input }) => {
+const inputStat$ = getInputStat(wordInput$, {
+  validator: (word, input) => word.startsWith(input),
+  onInput: ({ valid, input }) => {
     setHighlightByDiff(wordEl.firstChild as Node, input);
     if (!valid) {
       timer(200).subscribe(() => {
         wordInputEl.value = "";
+        wordInputEl.dispatchEvent(new InputEvent("input"));
         setHighlightByDiff(wordEl.firstChild as Node, "");
       });
     }
-  }
-);
+  },
+});
 
 const timingCountdown = statsEl.querySelector("#time .countdown")!;
 const minuteEl = <HTMLElement>timingCountdown.children.item(0);
@@ -67,6 +67,9 @@ const correctRateCounterEl = statsEl.querySelector<HTMLElement>(
   "#correct-rate .counter"
 )!;
 const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
+const backspaceCountCounterEl = statsEl.querySelector<HTMLElement>(
+  "#backspace-count .counter"
+)!;
 
 const inputSecond$ = interval(1000).pipe(
   filter(() => wordInputEl === document.activeElement),
@@ -75,7 +78,7 @@ const inputSecond$ = interval(1000).pipe(
 
 combineLatest([
   inputStat$.pipe(
-    tap(({ incorrectInputCount, correctInputCount }) => {
+    tap(({ incorrectInputCount, correctInputCount, backspaceCount }) => {
       const totalInputCount = incorrectInputCount + correctInputCount;
       inputCountCounterEl.style.setProperty("--count", totalInputCount + "");
       correctCountCounterEl.style.setProperty(
@@ -86,6 +89,7 @@ combineLatest([
         "--count",
         Math.floor((correctInputCount / totalInputCount) * 100) + ""
       );
+      backspaceCountCounterEl.style.setProperty("--count", backspaceCount + "");
     })
   ),
   inputSecond$.pipe(
@@ -97,6 +101,6 @@ combineLatest([
 ]).subscribe(([{ correctInputCount }, sec]) => {
   wpmCounterEl.style.setProperty(
     "--count",
-    Math.floor(correctInputCount / 5 / ((sec + 0.5) / 60)) + ""
+    Math.floor(correctInputCount / 5 / ((sec || 0.5) / 60)) + ""
   );
 });
