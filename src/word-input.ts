@@ -53,11 +53,14 @@ export const getInputStat = <T>(
 ) =>
   wordInput$.pipe(
     pairwise(),
-    map(([prev, curr]) => ({
-      ...curr,
-      valid: validator(curr.word, curr.input),
-      isBackspace: prev.input.length > curr.input.length,
-    })),
+    map(([prev, curr]) => {
+      const valid = validator(curr.word, curr.input);
+      return {
+        ...curr,
+        valid,
+        isBackspace: prev.input.length - curr.input.length === 1 && valid, //? how to judge backspace
+      };
+    }),
     tap(onInput),
     scan(
       (acc, { valid, input, isBackspace, wordCompletedCount }) => {

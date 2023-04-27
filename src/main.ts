@@ -47,7 +47,6 @@ const inputStat$ = getInputStat(wordInput$, {
     if (!valid) {
       timer(200).subscribe(() => {
         wordInputEl.value = "";
-        wordInputEl.dispatchEvent(new InputEvent("input"));
         setHighlightByDiff(wordEl.firstChild as Node, "");
       });
     }
