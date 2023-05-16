@@ -1,29 +1,23 @@
 export const config = {
-  sameName: "correct",
-  diffName: "incorrect",
+  sameName: "text-success",
+  diffName: "text-error",
 };
 
-const highlights: Map<string, Highlight> = (<any>CSS).highlights;
-
-export function setHighlightByDiff(node: Node, input: string) {
-  const nodeText = node.textContent ?? "";
-  const sameRanges: Range[] = [];
-  const diffRanges: Range[] = [];
-  input
-    .split("")
-    .slice(0, nodeText.length)
-    .forEach((char, i) => {
-      const range = new Range();
-      range.setStart(node, i);
-      range.setEnd(node, i + 1);
-      if (char === nodeText[i]) {
-        sameRanges.push(range);
-      } else {
-        diffRanges.push(range);
-      }
-    });
-
-  highlights
-    .set(config.sameName, new Highlight(...sameRanges))
-    .set(config.diffName, new Highlight(...diffRanges));
+export function setHighlightByDiff(textEl: HTMLElement, input: string) {
+  const charEls = textEl.children;
+  for (let i = 0; i < charEls.length; i++) {
+    const char = charEls[i];
+    if (!input[i]) {
+      char.classList.remove(config.sameName);
+      char.classList.remove(config.diffName);
+      continue;
+    }
+    if (char.textContent === input[i]) {
+      char.classList.add(config.sameName);
+      char.classList.remove(config.diffName);
+    } else {
+      char.classList.add(config.diffName);
+      char.classList.remove(config.sameName);
+    }
+  }
 }
