@@ -9,7 +9,7 @@ import {
   tap,
   timer,
 } from "rxjs";
-import "./style-polyfill";
+import "./theme-change";
 
 import { setHighlightByDiff } from "./highlight";
 import { getInputStat, getWordInput } from "./word-input";

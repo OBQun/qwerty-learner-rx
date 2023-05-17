@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { fromEvent, startWith } from "rxjs";
 import { themeChange } from "theme-change";
 
 const themes = [
@@ -44,22 +43,5 @@ themes.forEach((name) => {
   option.text = name;
   themeSelectEl.add(option);
 });
-
-const rootStyles = getComputedStyle(document.documentElement);
-const sheet = new CSSStyleSheet();
-document.adoptedStyleSheets = [sheet];
-
-fromEvent(themeSelectEl, "change")
-  .pipe(startWith(null))
-  .subscribe(() => {
-    sheet.replace(`
-    #word::highlight(correct) {
-      color: hsl(${rootStyles.getPropertyValue("--su")});
-    }
-    #word::highlight(incorrect) {
-      color: hsl(${rootStyles.getPropertyValue("--er")} );
-    }
-    `);
-  });
 
 themeChange();
