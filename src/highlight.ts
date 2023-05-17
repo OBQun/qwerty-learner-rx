@@ -6,18 +6,18 @@ export const config = {
 export function setHighlightByDiff(textEl: HTMLElement, input: string) {
   const charEls = textEl.children;
   for (let i = 0; i < charEls.length; i++) {
-    const char = charEls[i];
+    const charEl = charEls[i];
     if (!input[i]) {
-      char.classList.remove(config.sameName);
-      char.classList.remove(config.diffName);
+      charEl.classList.remove(config.sameName);
+      charEl.classList.remove(config.diffName);
       continue;
     }
-    if (char.textContent === input[i]) {
-      char.classList.add(config.sameName);
-      char.classList.remove(config.diffName);
+    if (charEl.textContent === input[i]) {
+      charEl.classList.add(config.sameName);
+      charEl.classList.remove(config.diffName);
     } else {
-      char.classList.add(config.diffName);
-      char.classList.remove(config.sameName);
+      charEl.classList.add(config.diffName);
+      charEl.classList.remove(config.sameName);
     }
   }
 }
