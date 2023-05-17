@@ -9,7 +9,7 @@ import {
   tap,
   timer,
 } from "rxjs";
-import "./style-polyfill";
+import "./theme-change";
 
 import { setHighlightByDiff } from "./highlight";
 import { getInputStat, getWordInput } from "./word-input";
@@ -34,7 +34,13 @@ const wordInput$ = getWordInput(
   userInput$,
   (word, input) => word === input,
   (word) => {
-    wordEl.innerText = word;
+    wordEl.replaceChildren(
+      ...word.split("").map((char) => {
+        const spanEl = <HTMLSpanElement>document.createElement("span");
+        spanEl.textContent = char;
+        return spanEl;
+      })
+    );
     wordInputEl.value = "";
     wordInputEl.maxLength = word.length;
   }
@@ -43,11 +49,11 @@ const wordInput$ = getWordInput(
 const inputStat$ = getInputStat(wordInput$, {
   validator: (word, input) => word.startsWith(input),
   onInput: ({ valid, input }) => {
-    setHighlightByDiff(wordEl.firstChild as Node, input);
+    setHighlightByDiff(wordEl, input);
     if (!valid) {
       timer(200).subscribe(() => {
         wordInputEl.value = "";
-        setHighlightByDiff(wordEl.firstChild as Node, "");
+        setHighlightByDiff(wordEl, "");
       });
     }
   },

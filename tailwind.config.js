@@ -17,7 +17,7 @@ module.exports = {
       addComponents({
         ".counter": {
           transition: "--count 0.3s",
-          "counter-set": "num calc(var(--count))",
+          "counter-reset": "num calc(var(--count))",
           "&::before": {
             content: "counter(num)",
           },
