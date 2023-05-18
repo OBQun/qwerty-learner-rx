@@ -1,65 +1,27 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
-  combineLatest,
+  combineLatestWith,
+  concatMap,
   filter,
   from,
   fromEvent,
   interval,
   map,
+  pairwise,
+  pipe,
+  scan,
+  startWith,
+  takeWhile,
   tap,
   timer,
 } from "rxjs";
 import "./theme-change";
 
-import { setHighlightByDiff } from "./highlight";
-import { getInputStat, getWordInput } from "./word-input";
 const mainEl = document.querySelector("main")!;
 const wordInputEl = document.querySelector<HTMLInputElement>("#word-input")!;
 const wordEl = document.querySelector<HTMLSpanElement>("#word")!;
 const statsEl = document.querySelector<HTMLUListElement>("#stats")!;
-fromEvent(mainEl, "focus").subscribe(() => {
-  wordInputEl.focus();
-});
-
-const word$ = from(["Hello", "Qwerty", "Learner"]);
-
-const userInput$ = fromEvent(
-  wordInputEl,
-  "input",
-  ({ target }) => (<HTMLInputElement>target).value
-);
-
-const wordInput$ = getWordInput(
-  word$,
-  userInput$,
-  (word, input) => word === input,
-  (word) => {
-    wordEl.replaceChildren(
-      ...word.split("").map((char) => {
-        const spanEl = <HTMLSpanElement>document.createElement("span");
-        spanEl.textContent = char;
-        return spanEl;
-      })
-    );
-    wordInputEl.value = "";
-    wordInputEl.maxLength = word.length;
-  }
-);
-
-const inputStat$ = getInputStat(wordInput$, {
-  validator: (word, input) => word.startsWith(input),
-  onInput: ({ valid, input }) => {
-    setHighlightByDiff(wordEl, input);
-    if (!valid) {
-      timer(200).subscribe(() => {
-        wordInputEl.value = "";
-        setHighlightByDiff(wordEl, "");
-      });
-    }
-  },
-});
-
-const timingCountdown = statsEl.querySelector("#time .countdown")!;
+const timingCountdown = statsEl.querySelector<HTMLElement>("#time .countdown")!;
 const minuteEl = <HTMLElement>timingCountdown.children.item(0);
 const secondEl = <HTMLElement>timingCountdown.children.item(1);
 const inputCountCounterEl = statsEl.querySelector<HTMLElement>(
@@ -72,19 +34,75 @@ const correctRateCounterEl = statsEl.querySelector<HTMLElement>(
   "#correct-rate .counter"
 )!;
 const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
-const backspaceCountCounterEl = statsEl.querySelector<HTMLElement>(
-  "#backspace-count .counter"
-)!;
+
+const word$ = from(["Hello", "Qwerty", "Learner"]);
+
+const userInput$ = fromEvent(
+  wordInputEl,
+  "input",
+  ({ target }) => (<HTMLInputElement>target).value
+);
 
 const inputSecond$ = interval(1000).pipe(
   filter(() => wordInputEl === document.activeElement),
   map((_, i) => i)
 );
 
-combineLatest([
-  inputStat$.pipe(
-    tap(({ incorrectInputCount, correctInputCount, backspaceCount }) => {
-      const totalInputCount = incorrectInputCount + correctInputCount;
+word$
+  .pipe(
+    concatMap((word) => {
+      renderWord(word);
+      return userInput$.pipe(
+        startWith(""),
+        tap(highlightChar),
+        pipe(
+          pairwise(),
+          filter(
+            ([prevInput, currInput]) =>
+              !!currInput && currInput.length > prevInput.length
+          ),
+          map(([, currInput]) => currInput)
+        ),
+        takeWhile((input) => word !== input),
+        map((input) => [word, input])
+      );
+    }),
+    scan(
+      (inputStat, [word, input]) => {
+        if (word.startsWith(input)) {
+          inputStat.correctInputCount += 1;
+        } else {
+          inputStat.incorrectInputCount += 1;
+          timer(200).subscribe(() => {
+            wordInputEl.value = "";
+            wordInputEl.dispatchEvent(new Event("input"));
+          });
+        }
+        return inputStat;
+      },
+      {
+        correctInputCount: 0,
+        incorrectInputCount: 0,
+      }
+    ),
+    combineLatestWith(inputSecond$),
+    map(([{ correctInputCount, incorrectInputCount }, second]) => {
+      const totalInputCount = correctInputCount + incorrectInputCount;
+      return {
+        correctInputCount,
+        incorrectInputCount,
+        totalInputCount,
+        second,
+        wpm: Math.floor(correctInputCount / 5 / ((second || 0.5) / 60)),
+        correctRate: correctInputCount / totalInputCount,
+      };
+    })
+  )
+  .subscribe(
+    ({ wpm, second, totalInputCount, correctInputCount, correctRate }) => {
+      wpmCounterEl.style.setProperty("--count", wpm + "");
+      minuteEl.style.setProperty("--value", Math.floor(second / 60) + "");
+      secondEl.style.setProperty("--value", (second % 60) + "");
       inputCountCounterEl.style.setProperty("--count", totalInputCount + "");
       correctCountCounterEl.style.setProperty(
         "--count",
@@ -92,20 +110,42 @@ combineLatest([
       );
       correctRateCounterEl.style.setProperty(
         "--count",
-        Math.floor((correctInputCount / totalInputCount) * 100) + ""
+        Math.floor(correctRate * 100) + ""
       );
-      backspaceCountCounterEl.style.setProperty("--count", backspaceCount + "");
-    })
-  ),
-  inputSecond$.pipe(
-    tap((sec) => {
-      minuteEl.style.setProperty("--value", Math.floor(sec / 60) + "");
-      secondEl.style.setProperty("--value", (sec % 60) + "");
-    })
-  ),
-]).subscribe(([{ correctInputCount }, sec]) => {
-  wpmCounterEl.style.setProperty(
-    "--count",
-    Math.floor(correctInputCount / 5 / ((sec || 0.5) / 60)) + ""
+    }
   );
+
+fromEvent(mainEl, "focus").subscribe(() => {
+  wordInputEl.focus();
 });
+
+function renderWord(word: string) {
+  wordEl.replaceChildren(
+    ...word.split("").map((char) => {
+      const spanEl = <HTMLSpanElement>document.createElement("span");
+      spanEl.textContent = char;
+      return spanEl;
+    })
+  );
+  wordInputEl.value = "";
+  wordInputEl.maxLength = word.length;
+}
+
+function highlightChar(input: string) {
+  const charEls = wordEl.children;
+  for (let i = 0; i < charEls.length; i++) {
+    const charEl = charEls[i];
+    if (!input[i]) {
+      charEl.classList.remove("text-success");
+      charEl.classList.remove("text-error");
+      continue;
+    }
+    if (charEl.textContent === input[i]) {
+      charEl.classList.add("text-success");
+      charEl.classList.remove("text-error");
+    } else {
+      charEl.classList.add("text-error");
+      charEl.classList.remove("text-success");
+    }
+  }
+}
