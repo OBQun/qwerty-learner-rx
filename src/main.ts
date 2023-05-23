@@ -1,22 +1,15 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
-  bufferCount,
-  combineLatest,
-  concatMap,
   delay,
   filter,
   from,
   fromEvent,
   interval,
-  map,
-  pairwise,
-  pipe,
   scan,
-  startWith,
-  takeUntil,
-  tap,
+  shareReplay,
   timer,
 } from "rxjs";
+import { Stats, getInputStat, getStats, getWordByStep } from "./core";
 import "./theme-change";
 
 const mainEl = document.querySelector("main")!;
@@ -37,15 +30,6 @@ const correctRateCounterEl = statsEl.querySelector<HTMLElement>(
 )!;
 const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
 
-interface Stats {
-  wpm: number;
-  second: number;
-  totalInputCount: number;
-  correctInputCount: number;
-  incorrectInputCount: number;
-  correctRate: number;
-}
-
 const word$ = from(["Hello", "Qwerty", "Learner"]);
 
 const userInput$ = fromEvent(
@@ -56,114 +40,46 @@ const userInput$ = fromEvent(
 
 const inputSecond$ = interval(1000).pipe(
   filter(() => wordInputEl === document.activeElement),
-  scan((sec) => ++sec, 0)
+  scan((sec) => ++sec, 0),
+  shareReplay({
+    bufferSize: 1,
+    refCount: true,
+  })
 );
 
-combineLatest([
-  word$.pipe(
-    concatMap(
-      (word) => (
-        /**
-         * 单词变化回调
-         * @param word 当前单词
-         */
-        (function onWordChange(word: string) {
-          renderWord(word);
-        })(word),
-        userInput$.pipe(
-          startWith(""),
-          tap(
-            /**
-             * 用户输入回调
-             * @param input 用户输入
-             */
-            function onInput(input) {
-              highlightChar(input);
-            }
-          ),
-          /**
-           * 过滤回退
-           */
-          pipe(
-            pairwise(),
-            filter(
-              ([prevInput, currInput]) =>
-                !!currInput && currInput.length > prevInput.length
-            ),
-            map(([, currInput]) => currInput)
-          ),
-          map((input) => [word, input]),
-          takeUntil(
-            userInput$.pipe(
-              filter((input) => input === word),
-              tap(() => {
-                /**
-                 * 单词通过回调
-                 * @param word 通过的单词
-                 */
-                (function onPass(word: string) {
-                  timer(200).subscribe(() => {
-                    resetInput();
-                  });
-                })(word);
-              }),
-              bufferCount(
-                /**
-                 * 重复练习次数
-                 */
-                3
-              ),
-              delay(200)
-            )
-          )
-        )
-      )
-    ),
-    scan(
-      (inputStat, [word, input]) => {
-        if (word.startsWith(input)) {
-          inputStat.correctInputCount += 1;
-        } else {
-          inputStat.incorrectInputCount += 1;
-          /**
-           * 输入错误回调
-           * @param word 出错单词
-           * @param input 错误输入
-           */
-          (function onInputIncorrect(word: string, input: string) {
-            timer(200).subscribe(() => {
-              resetInput();
-            });
-          })(word, input);
-        }
-        return inputStat;
-      },
-      {
-        correctInputCount: 0,
-        incorrectInputCount: 0,
-      }
-    ),
-    startWith({
-      correctInputCount: 0,
-      incorrectInputCount: 0,
-    })
-  ),
-  inputSecond$,
-])
-  .pipe(
-    map(([{ correctInputCount, incorrectInputCount }, second]) => {
-      const totalInputCount = correctInputCount + incorrectInputCount;
-      return {
-        correctInputCount,
-        incorrectInputCount,
-        totalInputCount,
-        second,
-        wpm: Math.floor(correctInputCount / 5 / ((second || 0.5) / 60)),
-        correctRate: correctInputCount / totalInputCount,
-      } as Stats;
-    })
-  )
-  .subscribe(renderStats);
+const steppedWord$ = getWordByStep(
+  word$,
+  userInput$,
+  { passFn: (word, input) => word === input, repeatCount: 3 },
+  {
+    onPass() {
+      timer(200).subscribe(() => {
+        resetInput();
+      });
+    },
+  }
+);
+
+const inputStat$ = getInputStat(
+  steppedWord$,
+  userInput$,
+  { validator: (word, input) => word.startsWith(input) },
+  {
+    onValidate(valid) {
+      if (!valid)
+        timer(200).subscribe(() => {
+          resetInput();
+        });
+    },
+  }
+);
+
+const stats$ = getStats(inputStat$, inputSecond$);
+
+steppedWord$.pipe(delay(200)).subscribe(renderWord);
+userInput$.subscribe(highlightChar);
+inputSecond$.subscribe(renderTime);
+stats$.subscribe(renderStats);
 
 fromEvent(mainEl, "focus").subscribe(() => {
   wordInputEl.focus();
@@ -205,16 +121,18 @@ function highlightChar(input: string) {
   }
 }
 
+function renderTime(second: number) {
+  minuteEl.style.setProperty("--value", Math.floor(second / 60) + "");
+  secondEl.style.setProperty("--value", (second % 60) + "");
+}
+
 function renderStats({
   wpm,
-  second,
   totalInputCount,
   correctInputCount,
   correctRate,
 }: Stats) {
   wpmCounterEl.style.setProperty("--count", wpm + "");
-  minuteEl.style.setProperty("--value", Math.floor(second / 60) + "");
-  secondEl.style.setProperty("--value", (second % 60) + "");
   inputCountCounterEl.style.setProperty("--count", totalInputCount + "");
   correctCountCounterEl.style.setProperty("--count", correctInputCount + "");
   correctRateCounterEl.style.setProperty(
