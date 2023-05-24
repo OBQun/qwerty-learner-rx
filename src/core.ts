@@ -17,13 +17,13 @@ import {
 
 export interface Strategy<T> {
   passFn: (word: T, input: string) => boolean;
-  repeatCount: number;
+  repeat: number;
 }
 
 export function getWordByStep<T>(
   word$: Observable<T>,
   input$: Observable<string>,
-  { passFn, repeatCount = 1 }: Strategy<T>,
+  { passFn, repeat = 1 }: Strategy<T>,
   {
     onPass,
   }: Partial<{
@@ -41,7 +41,7 @@ export function getWordByStep<T>(
             tap(() => {
               onPass?.(word);
             }),
-            bufferCount(repeatCount)
+            bufferCount(repeat)
           )
         )
       )

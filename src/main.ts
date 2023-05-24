@@ -50,7 +50,7 @@ const inputSecond$ = interval(1000).pipe(
 const steppedWord$ = getWordByStep(
   word$,
   userInput$,
-  { passFn: (word, input) => word === input, repeatCount: 3 },
+  { passFn: (word, input) => word === input, repeat: 1 },
   {
     onPass() {
       timer(200).subscribe(() => {
@@ -78,8 +78,8 @@ const stats$ = getStats(inputStat$, inputSecond$);
 
 steppedWord$.pipe(delay(200)).subscribe(renderWord);
 userInput$.subscribe(highlightChar);
-inputSecond$.subscribe(renderTime);
-stats$.subscribe(renderStats);
+inputSecond$.subscribe(updateClock);
+stats$.subscribe(updateStats);
 
 fromEvent(mainEl, "focus").subscribe(() => {
   wordInputEl.focus();
@@ -121,12 +121,12 @@ function highlightChar(input: string) {
   }
 }
 
-function renderTime(second: number) {
+function updateClock(second: number) {
   minuteEl.style.setProperty("--value", Math.floor(second / 60) + "");
   secondEl.style.setProperty("--value", (second % 60) + "");
 }
 
-function renderStats({
+function updateStats({
   wpm,
   totalInputCount,
   correctInputCount,

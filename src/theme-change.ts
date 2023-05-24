@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 import { themeChange } from "theme-change";
 
 const themes = [
@@ -35,13 +34,13 @@ const themes = [
 
 const themeSelectEl = document.querySelector<HTMLSelectElement>(
   "[data-choose-theme]"
-)!;
+);
 
 themes.forEach((name) => {
   const option = document.createElement("option");
   option.value = name;
   option.text = name;
-  themeSelectEl.add(option);
+  themeSelectEl?.add(option);
 });
 
 themeChange();
