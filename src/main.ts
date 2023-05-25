@@ -10,11 +10,11 @@ import {
   timer,
 } from "rxjs";
 import { Stats, getInputStat, getItemByStep, getStats } from "./core";
-import { loadRemoteDictionary } from "./dictionary";
+import { syncLocalDictionary } from "./dictionary";
 import "./theme-change";
 
 const mainEl = document.querySelector("main")!;
-const wordInputEl = document.querySelector<HTMLInputElement>("#word-input")!;
+const inputEl = document.querySelector<HTMLInputElement>("#word-input")!;
 const wordEl = document.querySelector<HTMLSpanElement>("#word")!;
 const statsEl = document.querySelector<HTMLUListElement>("#stats")!;
 const timingCountdown = statsEl.querySelector<HTMLElement>("#time .countdown")!;
@@ -34,13 +34,13 @@ const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
 const word$ = from(["Hello", "Qwerty", "Learner"]);
 
 const userInput$ = fromEvent(
-  wordInputEl,
+  inputEl,
   "input",
   ({ target }) => (<HTMLInputElement>target).value
 );
 
 const inputSecond$ = interval(1000).pipe(
-  filter(() => wordInputEl === document.activeElement),
+  filter(() => inputEl === document.activeElement),
   scan((sec) => ++sec, 0),
   shareReplay({
     bufferSize: 1,
@@ -48,7 +48,7 @@ const inputSecond$ = interval(1000).pipe(
   })
 );
 
-loadRemoteDictionary("CET-4").subscribe(console.log);
+syncLocalDictionary("CET-4").subscribe(console.log);
 
 const steppedWord$ = getItemByStep(
   word$,
@@ -79,18 +79,22 @@ const inputStat$ = getInputStat(
 
 const stats$ = getStats(inputStat$, inputSecond$);
 
-steppedWord$.pipe(delay(200)).subscribe(renderWord);
+steppedWord$.pipe(delay(200)).subscribe((word) => {
+  renderWord(word);
+  inputEl.value = "";
+  inputEl.maxLength = word.length;
+});
 userInput$.subscribe(highlightChar);
 inputSecond$.subscribe(updateClock);
 stats$.subscribe(updateStats);
 
 fromEvent(mainEl, "focus").subscribe(() => {
-  wordInputEl.focus();
+  inputEl.focus();
 });
 
 function resetInput() {
-  wordInputEl.value = "";
-  wordInputEl.dispatchEvent(new Event("input"));
+  inputEl.value = "";
+  inputEl.dispatchEvent(new Event("input"));
 }
 
 function renderWord(word: string) {
@@ -101,8 +105,6 @@ function renderWord(word: string) {
       return spanEl;
     })
   );
-  wordInputEl.value = "";
-  wordInputEl.maxLength = word.length;
 }
 
 function highlightChar(input: string) {

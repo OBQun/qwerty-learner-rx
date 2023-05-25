@@ -1,4 +1,5 @@
-import { map, shareReplay, switchMap, take } from "rxjs";
+import { openDB } from "idb";
+import { catchError, map, of, shareReplay, switchMap, take } from "rxjs";
 import { fromFetch } from "rxjs/fetch";
 import YAML from "yaml";
 
@@ -27,17 +28,56 @@ export function loadYaml<T>(path: string) {
   );
 }
 
-export const remoteDictionaries$ = loadYaml<Dictionary[]>(
-  DICTIONARY_INDEX_PATH
-).pipe(shareReplay({ bufferSize: 1, refCount: false }));
+export const remoteDictionaries$ = loadYaml<{
+  version: number;
+  dictionaries: Dictionary[];
+}>(DICTIONARY_INDEX_PATH).pipe(shareReplay({ bufferSize: 1, refCount: false }));
+
+export const dictionaryDB$ = remoteDictionaries$.pipe(
+  catchError(() => of({ version: undefined, dictionaries: [] })),
+  switchMap(({ version, dictionaries }) =>
+    openDB("dictionary", version, {
+      upgrade(db) {
+        if (version) {
+          dictionaries.forEach((dict) => {
+            if (!db.objectStoreNames.contains(dict.name))
+              db.createObjectStore(dict.name, { keyPath: "word" });
+          });
+        }
+      },
+    })
+  ),
+  shareReplay({ bufferSize: 1, refCount: false })
+);
 
 export function loadRemoteDictionary(name: string) {
   return remoteDictionaries$.pipe(
     take(1),
-    map((dictionaries) => dictionaries.find((dict) => dict.name === name)),
+    map(({ dictionaries }) => dictionaries.find((dict) => dict.name === name)),
     switchMap((dict) => {
       if (dict) return loadYaml<Word[]>(dict.path);
       throw new Error(`Remote dictionary ${name} not found`);
     })
+  );
+}
+
+export function syncLocalDictionary(name: string) {
+  return loadRemoteDictionary(name).pipe(
+    switchMap((words) =>
+      dictionaryDB$.pipe(
+        switchMap((db) => {
+          const tx = db.transaction(name, "readwrite");
+          const store = tx.objectStore(name);
+
+          return store
+            .count()
+            .then((count) =>
+              ((action) => Promise.all(words.map((word) => action(word))))(
+                count ? store.put.bind(store) : store.add.bind(store)
+              )
+            );
+        })
+      )
+    )
   );
 }
