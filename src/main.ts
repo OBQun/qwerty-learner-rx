@@ -9,7 +9,8 @@ import {
   shareReplay,
   timer,
 } from "rxjs";
-import { Stats, getInputStat, getStats, getWordByStep } from "./core";
+import { Stats, getInputStat, getItemByStep, getStats } from "./core";
+import { loadRemoteDictionary } from "./dictionary";
 import "./theme-change";
 
 const mainEl = document.querySelector("main")!;
@@ -47,7 +48,9 @@ const inputSecond$ = interval(1000).pipe(
   })
 );
 
-const steppedWord$ = getWordByStep(
+loadRemoteDictionary("CET-4").subscribe(console.log);
+
+const steppedWord$ = getItemByStep(
   word$,
   userInput$,
   { passFn: (word, input) => word === input, repeat: 1 },

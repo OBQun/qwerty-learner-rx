@@ -20,26 +20,26 @@ export interface Strategy<T> {
   repeat: number;
 }
 
-export function getWordByStep<T>(
-  word$: Observable<T>,
+export function getItemByStep<T>(
+  item$: Observable<T>,
   input$: Observable<string>,
   { passFn, repeat = 1 }: Strategy<T>,
   {
     onPass,
   }: Partial<{
-    onPass: (word: T) => void;
+    onPass: (item: T) => void;
   }> = {}
 ) {
-  return word$.pipe(
-    concatMap((word) =>
+  return item$.pipe(
+    concatMap((item) =>
       input$.pipe(
         startWith(""),
-        map(() => word),
+        map(() => item),
         takeUntil(
           input$.pipe(
-            filter((input) => passFn(word, input)),
+            filter((input) => passFn(item, input)),
             tap(() => {
-              onPass?.(word);
+              onPass?.(item);
             }),
             bufferCount(repeat)
           )
@@ -60,18 +60,18 @@ export interface InputStat {
 }
 
 export function getInputStat<T>(
-  steppedWord$: Observable<T>,
+  steppedItem$: Observable<T>,
   input$: Observable<string>,
   { validator }: { validator: (word: T, input: string) => boolean },
   {
     onValidate,
   }: Partial<{
-    onValidate: (valid: boolean, source: { word: T; input: string }) => void;
+    onValidate: (valid: boolean, source: { item: T; input: string }) => void;
   }>
 ): Observable<InputStat> {
-  return steppedWord$.pipe(
+  return steppedItem$.pipe(
     switchScan(
-      (stat, word) =>
+      (stat, item) =>
         input$.pipe(
           // 过滤回退
           pipe(
@@ -80,8 +80,8 @@ export function getInputStat<T>(
             filter(([prev, curr]) => curr.length > prev.length)
           ),
           map(([, input]) => {
-            const valid = validator(word, input);
-            onValidate?.(valid, { word, input });
+            const valid = validator(item, input);
+            onValidate?.(valid, { item, input });
             if (valid) {
               stat.correct++;
             } else {
