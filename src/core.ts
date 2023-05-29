@@ -1,40 +1,25 @@
 import {
   BehaviorSubject,
   Observable,
-  bufferCount,
-  combineLatest,
+  combineLatestWith,
   concatMap,
   connect,
   filter,
   last,
   map,
   pairwise,
-  pipe,
-  race,
   startWith,
   switchScan,
   takeUntil,
 } from "rxjs";
 
-export function passTrigger<T>(
-  passFn: (item: T, input: string) => boolean,
-  repeatCount = 1
-) {
-  return (item: T) =>
-    pipe(
-      filter((input: string) => passFn(item, input)),
-      bufferCount(repeatCount)
-    );
-}
-
-export function stepByStep<T>(...notifiers: ((item: T) => Observable<any>)[]) {
-  return pipe(
-    concatMap((item: T) =>
-      new BehaviorSubject(item).pipe(
-        takeUntil(race(notifiers.map((notifier) => notifier(item))))
+export function stepByStep<T>(notifier: (item: T) => Observable<any>) {
+  return (source$: Observable<T>) =>
+    source$.pipe(
+      concatMap((item) =>
+        new BehaviorSubject(item).pipe(takeUntil(notifier(item)))
       )
-    )
-  );
+    );
 }
 
 export interface InputStat {
@@ -44,31 +29,38 @@ export interface InputStat {
 
 // 过滤回退
 export function filterBackspace() {
-  return pipe(
-    startWith<string>(""),
-    pairwise(),
-    filter(([prev, curr]) => curr.length > prev.length),
-    map(([, curr]) => curr)
-  );
+  return (source$: Observable<string>) =>
+    source$.pipe(
+      startWith(""),
+      pairwise(),
+      filter(([prev, curr]) => curr.length > prev.length),
+      map(([, curr]) => curr)
+    );
 }
 
-export function inputStat<T>(valid$: (item: T) => Observable<boolean>) {
-  return pipe(
-    switchScan(
-      (stat, item: T) =>
-        valid$(item).pipe(
-          map((valid) => {
-            if (valid) {
-              stat.correct++;
-            } else {
-              stat.incorrect++;
-            }
-            return stat;
-          })
-        ),
-      { correct: 0, incorrect: 0 } as InputStat
-    )
-  );
+export function inputStat<T>(validFn: (item: T) => Observable<boolean>) {
+  return (source$: Observable<T>) =>
+    source$.pipe(
+      connect((sharedSource$) =>
+        sharedSource$.pipe(
+          switchScan(
+            (stat, item) =>
+              validFn(item).pipe(
+                map((valid) => {
+                  if (valid) {
+                    stat.correct++;
+                  } else {
+                    stat.incorrect++;
+                  }
+                  return stat;
+                })
+              ),
+            { correct: 0, incorrect: 0 } as InputStat
+          ),
+          takeUntil(sharedSource$.pipe(last()))
+        )
+      )
+    );
 }
 
 export interface Stats {
@@ -81,22 +73,24 @@ export interface Stats {
 }
 
 export function stats(inputSecond$: Observable<number>) {
-  return pipe(
-    connect((sharedInputStat$: Observable<InputStat>) =>
-      combineLatest([sharedInputStat$, inputSecond$]).pipe(
-        map(([{ correct, incorrect }, second]) => {
-          const totalInputCount = correct + incorrect;
-          return {
-            correctInputCount: correct,
-            incorrectInputCount: incorrect,
-            totalInputCount,
-            wpm: Math.floor(correct / 5 / ((second || 0.5) / 60)),
-            correctRate: correct / totalInputCount,
-            second,
-          } as Stats;
-        }),
-        takeUntil(sharedInputStat$.pipe(last()))
+  return (source$: Observable<InputStat>) =>
+    source$.pipe(
+      connect((sharedSource$) =>
+        sharedSource$.pipe(
+          combineLatestWith(inputSecond$),
+          map(([{ correct, incorrect }, second]) => {
+            const totalInputCount = correct + incorrect;
+            return {
+              correctInputCount: correct,
+              incorrectInputCount: incorrect,
+              totalInputCount,
+              wpm: Math.floor(correct / 5 / ((second || 0.5) / 60)),
+              correctRate: correct / totalInputCount,
+              second,
+            } as Stats;
+          }),
+          takeUntil(sharedSource$.pipe(last()))
+        )
       )
-    )
-  );
+    );
 }

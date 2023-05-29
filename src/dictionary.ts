@@ -74,7 +74,6 @@ export function syncLocalDictionary(name: string) {
         switchMap(async (db) => {
           const tx = db.transaction(name, "readwrite");
           const store = tx.objectStore(name);
-
           await store.clear();
           words.forEach((word, i) => store.add(word, i));
           return tx.done;
