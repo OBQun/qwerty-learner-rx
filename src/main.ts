@@ -1,16 +1,27 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
+  Subject,
   delay,
   filter,
   from,
   fromEvent,
   interval,
+  map,
   scan,
   shareReplay,
+  switchMap,
+  tap,
   timer,
 } from "rxjs";
-import { Stats, getInputStat, getItemByStep, getStats } from "./core";
-import { syncLocalDictionary } from "./dictionary";
+import {
+  Stats,
+  filterBackspace,
+  inputStat,
+  passTrigger,
+  stats,
+  stepByStep,
+} from "./core";
+import { Word, getPaginatedItems } from "./dictionary";
 import "./theme-change";
 
 const mainEl = document.querySelector("main")!;
@@ -31,8 +42,6 @@ const correctRateCounterEl = statsEl.querySelector<HTMLElement>(
 )!;
 const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
 
-const word$ = from(["Hello", "Qwerty", "Learner"]);
-
 const userInput$ = fromEvent(
   inputEl,
   "input",
@@ -48,38 +57,46 @@ const inputSecond$ = interval(1000).pipe(
   })
 );
 
-syncLocalDictionary("CET-4").subscribe(console.log);
+const words$ = getPaginatedItems<Word>("CET-4", 0, 2);
 
-const steppedWord$ = getItemByStep(
-  word$,
-  userInput$,
-  { passFn: (word, input) => word === input, repeat: 1 },
-  {
-    onPass() {
-      timer(200).subscribe(() => {
-        resetInput();
-      });
-    },
-  }
+const skip$ = new Subject<void>();
+const jump$ = new Subject<number>();
+
+const steppedWord$ = words$.pipe(
+  switchMap((words) => from(words)),
+  stepByStep((item) =>
+    userInput$.pipe(
+      passTrigger<Word>(({ word }, input) => word === input, 3)(item)
+    )
+  ),
+  shareReplay({ refCount: true, bufferSize: 1 })
 );
 
-const inputStat$ = getInputStat(
-  steppedWord$,
-  userInput$,
-  { validator: (word, input) => word.startsWith(input) },
-  {
-    onValidate(valid) {
-      if (!valid)
-        timer(200).subscribe(() => {
-          resetInput();
-        });
-    },
-  }
+const inputStat$ = steppedWord$.pipe(
+  inputStat(({ word }) =>
+    userInput$.pipe(
+      filterBackspace(),
+      map((input) => word.startsWith(input)),
+      tap((valid) => {
+        if (!valid) {
+          timer(200).subscribe(() => {
+            resetInput();
+          });
+        }
+      })
+    )
+  ),
+  shareReplay({ refCount: true, bufferSize: 1 })
 );
 
-const stats$ = getStats(inputStat$, inputSecond$);
+// timer(1000).subscribe(() => {
+//   skip$.next();
+//   skip$.next();
+// });
 
-steppedWord$.pipe(delay(200)).subscribe((word) => {
+const stats$ = inputStat$.pipe(stats(inputSecond$));
+
+steppedWord$.pipe(delay(200)).subscribe(({ word }) => {
   renderWord(word);
   inputEl.value = "";
   inputEl.maxLength = word.length;

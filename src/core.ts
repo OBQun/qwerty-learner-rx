@@ -1,56 +1,39 @@
 import {
+  BehaviorSubject,
   Observable,
   bufferCount,
   combineLatest,
   concatMap,
-  distinctUntilChanged,
+  connect,
   filter,
+  last,
   map,
   pairwise,
   pipe,
-  shareReplay,
+  race,
   startWith,
   switchScan,
   takeUntil,
-  tap,
 } from "rxjs";
 
-export interface Strategy<T> {
-  passFn: (word: T, input: string) => boolean;
-  repeat: number;
+export function passTrigger<T>(
+  passFn: (item: T, input: string) => boolean,
+  repeatCount = 1
+) {
+  return (item: T) =>
+    pipe(
+      filter((input: string) => passFn(item, input)),
+      bufferCount(repeatCount)
+    );
 }
 
-export function getItemByStep<T>(
-  item$: Observable<T>,
-  input$: Observable<string>,
-  { passFn, repeat = 1 }: Strategy<T>,
-  {
-    onPass,
-  }: Partial<{
-    onPass: (item: T) => void;
-  }> = {}
-) {
-  return item$.pipe(
-    concatMap((item) =>
-      input$.pipe(
-        startWith(""),
-        map(() => item),
-        takeUntil(
-          input$.pipe(
-            filter((input) => passFn(item, input)),
-            tap(() => {
-              onPass?.(item);
-            }),
-            bufferCount(repeat)
-          )
-        )
+export function stepByStep<T>(...notifiers: ((item: T) => Observable<any>)[]) {
+  return pipe(
+    concatMap((item: T) =>
+      new BehaviorSubject(item).pipe(
+        takeUntil(race(notifiers.map((notifier) => notifier(item))))
       )
-    ),
-    distinctUntilChanged(),
-    shareReplay({
-      bufferSize: 1,
-      refCount: true,
-    })
+    )
   );
 }
 
@@ -59,29 +42,22 @@ export interface InputStat {
   incorrect: number;
 }
 
-export function getInputStat<T>(
-  steppedItem$: Observable<T>,
-  input$: Observable<string>,
-  { validator }: { validator: (word: T, input: string) => boolean },
-  {
-    onValidate,
-  }: Partial<{
-    onValidate: (valid: boolean, source: { item: T; input: string }) => void;
-  }>
-): Observable<InputStat> {
-  return steppedItem$.pipe(
+// 过滤回退
+export function filterBackspace() {
+  return pipe(
+    startWith<string>(""),
+    pairwise(),
+    filter(([prev, curr]) => curr.length > prev.length),
+    map(([, curr]) => curr)
+  );
+}
+
+export function inputStat<T>(valid$: (item: T) => Observable<boolean>) {
+  return pipe(
     switchScan(
-      (stat, item) =>
-        input$.pipe(
-          // 过滤回退
-          pipe(
-            startWith(""),
-            pairwise(),
-            filter(([prev, curr]) => curr.length > prev.length)
-          ),
-          map(([, input]) => {
-            const valid = validator(item, input);
-            onValidate?.(valid, { item, input });
+      (stat, item: T) =>
+        valid$(item).pipe(
+          map((valid) => {
             if (valid) {
               stat.correct++;
             } else {
@@ -90,7 +66,7 @@ export function getInputStat<T>(
             return stat;
           })
         ),
-      { correct: 0, incorrect: 0 }
+      { correct: 0, incorrect: 0 } as InputStat
     )
   );
 }
@@ -104,21 +80,23 @@ export interface Stats {
   second: number;
 }
 
-export function getStats(
-  inputStat$: Observable<InputStat>,
-  inputSecond$: Observable<number>
-): Observable<Stats> {
-  return combineLatest([inputStat$, inputSecond$]).pipe(
-    map(([{ correct, incorrect }, second]) => {
-      const totalInputCount = correct + incorrect;
-      return {
-        correctInputCount: correct,
-        incorrectInputCount: incorrect,
-        totalInputCount,
-        wpm: Math.floor(correct / 5 / ((second || 0.5) / 60)),
-        correctRate: correct / totalInputCount,
-        second,
-      };
-    })
+export function stats(inputSecond$: Observable<number>) {
+  return pipe(
+    connect((sharedInputStat$: Observable<InputStat>) =>
+      combineLatest([sharedInputStat$, inputSecond$]).pipe(
+        map(([{ correct, incorrect }, second]) => {
+          const totalInputCount = correct + incorrect;
+          return {
+            correctInputCount: correct,
+            incorrectInputCount: incorrect,
+            totalInputCount,
+            wpm: Math.floor(correct / 5 / ((second || 0.5) / 60)),
+            correctRate: correct / totalInputCount,
+            second,
+          } as Stats;
+        }),
+        takeUntil(sharedInputStat$.pipe(last()))
+      )
+    )
   );
 }
