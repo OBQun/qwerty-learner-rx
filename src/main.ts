@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
+  BehaviorSubject,
   Subject,
   bufferCount,
   filter,
@@ -8,17 +9,11 @@ import {
   map,
   merge,
   scan,
+  switchMap,
   tap,
   timer,
 } from "rxjs";
-import {
-  Stats,
-  filterBackspace,
-  inputStat,
-  stats,
-  stepByStep,
-  stepper,
-} from "./core";
+import { Stats, filterBackspace, inputStat, stats, stepByStep } from "./core";
 import { Word, getPaginatedItems } from "./dictionary";
 import "./theme-change";
 
@@ -50,59 +45,61 @@ const inputSecond$ = interval(1000).pipe(
   scan((sec) => ++sec, 0)
 );
 
-const words$ = getPaginatedItems<Word>("CET-4", 0, 2);
+const words$ = new BehaviorSubject<Word[]>([]);
+
+getPaginatedItems<Word>("CET-4", 0, 2).subscribe((words) => words$.next(words));
 
 const skip$ = new Subject<void>();
 const jump$ = new Subject<number>();
 
-const steppedWord$ = words$
+words$
   .pipe(
-    stepper(
-      stepByStep(({ word }) =>
-        merge(
-          userInput$.pipe(
-            filter((input) => word === input),
-            tap(() => {
-              timer(200).subscribe(() => {
-                resetInput();
-              });
-            }),
-            bufferCount(1)
-          ),
-          skip$
-        )
-      ),
-      jump$
-    )
-  )
-  .pipe(
-    tap(({ word }) => {
-      timer(200).subscribe(() => {
-        renderWord(word);
-        inputEl.value = "";
-        inputEl.maxLength = word.length;
-      });
-    })
-  )
-  .pipe(
-    inputStat(({ word }) =>
-      userInput$.pipe(
-        filterBackspace(),
-        map((input) => word.startsWith(input)),
-        tap((valid) => {
-          if (!valid) {
+    stepByStep(({ word }) =>
+      merge(
+        userInput$.pipe(
+          filter((input) => word === input),
+          tap(() => {
             timer(200).subscribe(() => {
               resetInput();
             });
-          }
-        })
+          }),
+          bufferCount(1)
+        ),
+        skip$
       )
+    ),
+    switchMap((steppedWordFn) =>
+      steppedWordFn(jump$)
+        .pipe(
+          tap(({ word }) => {
+            timer(200).subscribe(() => {
+              renderWord(word);
+              inputEl.value = "";
+              inputEl.maxLength = word.length;
+            });
+          })
+        )
+        .pipe(
+          inputStat(({ word }) =>
+            userInput$.pipe(
+              filterBackspace(),
+              map((input) => word.startsWith(input)),
+              tap((valid) => {
+                if (!valid) {
+                  timer(200).subscribe(() => {
+                    resetInput();
+                  });
+                }
+              })
+            )
+          )
+        )
+        .pipe(stats(inputSecond$.pipe(tap(updateClock))), tap(updateStats))
     )
   )
-  .pipe(stats(inputSecond$.pipe(tap(updateClock))), tap(updateStats));
+  .subscribe();
 
 userInput$.subscribe(highlightChar);
-steppedWord$.subscribe();
 
 fromEvent(mainEl, "focus").subscribe(() => {
   inputEl.focus();

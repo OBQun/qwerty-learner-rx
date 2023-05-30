@@ -17,42 +17,35 @@ import {
   takeUntil,
 } from "rxjs";
 
-export function stepByStep<T>(notifier: (item: T) => Observable<any>) {
-  return (source$: Observable<T>) =>
-    source$.pipe(
-      concatMap((item) =>
-        new BehaviorSubject(item).pipe(takeUntil(notifier(item)))
-      )
-    );
-}
-
-export function stepper<T>(
-  mapper: (item$: Observable<T>) => Observable<T>,
-  controller$: Observable<number> = new Subject()
-) {
-  return (source$: Observable<T[]>) =>
-    source$.pipe(
-      switchMap((items) => {
-        const finished = new Subject<void>();
-        return controller$.pipe(
-          startWith(0),
-          switchMap((i) =>
-            mapper(from(items.slice(i))).pipe(
-              connect((sharedItem$) => {
-                const finishSub = sharedItem$.pipe(last()).subscribe(() => {
-                  finished.next();
-                });
-                return sharedItem$.pipe(
-                  finalize(() => {
-                    finishSub.unsubscribe();
+export function stepByStep<T>(notifier: (item: T) => Observable<unknown>) {
+  const finished = new Subject<void>();
+  return (items$: Observable<T[]>) =>
+    items$.pipe(
+      map(
+        (items) =>
+          (controller$: Observable<number> = new Subject()) =>
+            controller$.pipe(
+              startWith(0),
+              switchMap((i) =>
+                from(items.slice(i)).pipe(
+                  concatMap((item) =>
+                    new BehaviorSubject(item).pipe(takeUntil(notifier(item)))
+                  ),
+                  connect((sharedItem$) => {
+                    const finishSub = sharedItem$.pipe(last()).subscribe(() => {
+                      finished.next();
+                    });
+                    return sharedItem$.pipe(
+                      finalize(() => {
+                        finishSub.unsubscribe();
+                      })
+                    );
                   })
-                );
-              })
+                )
+              ),
+              takeUntil(finished)
             )
-          ),
-          takeUntil(finished)
-        );
-      })
+      )
     );
 }
 
