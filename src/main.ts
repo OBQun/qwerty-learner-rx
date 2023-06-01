@@ -41,13 +41,15 @@ const userInput$ = fromEvent(
   ({ target }) => (<HTMLInputElement>target).value
 );
 const inputSecond$ = interval(1000).pipe(
-  // filter(() => inputEl === document.activeElement),
+  filter(() => inputEl === document.activeElement),
   scan((sec) => ++sec, 0)
 );
 
 const words$ = new BehaviorSubject<Word[]>([]);
 
-getPaginatedItems<Word>("CET-4", 0, 2).subscribe((words) => words$.next(words));
+getPaginatedItems<Word>("CET-4", 0, 20).subscribe((words) =>
+  words$.next(words)
+);
 
 const skip$ = new Subject<void>();
 const jump$ = new Subject<number>();

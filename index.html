@@ -9,7 +9,7 @@
     <script type="module" src="/src/main.ts" defer></script>
   </head>
 
-  <body class="drawer">
+  <body class="drawer h-screen">
     <input type="checkbox" id="dict-drawer" class="drawer-toggle" />
     <section class="container drawer-content mx-auto flex flex-col gap-20">
       <header class="navbar justify-between">
@@ -40,10 +40,11 @@
           <dfn class="not-italic">
             <ruby>
               <span class="text-[5vw] text-primary" id="word"></span><rp>(</rp
-              ><rt class="text-[1vw] text-accent" id="pronounce"></rt><rp>)</rp>
+              ><rt class="text-[1vw] text-accent" id="pronunciation"></rt
+              ><rp>)</rp>
             </ruby>
           </dfn>
-          <span class="text-[2vw] text-secondary" id="definition"></span>
+          <span class="text-[2vw] text-secondary" id="meanings"></span>
         </h2>
 
         <ul class="stats w-full shadow-lg" id="stats">
@@ -87,12 +88,20 @@
 
     <div class="drawer-side">
       <label for="dict-drawer" class="drawer-overlay"></label>
-      <ul class="menu w-80 bg-base-100 p-4">
+      <ul class="menu h-full w-80 gap-y-4 bg-base-100 p-4">
         <li>
           <a class="card active">
             <div class="card-body">
               <h2 class="card-title">CET-4</h2>
               <p>英语四级</p>
+            </div>
+          </a>
+        </li>
+        <li>
+          <a class="card">
+            <div class="card-body">
+              <h2 class="card-title">CET-6</h2>
+              <p>英语六级</p>
             </div>
           </a>
         </li>
