@@ -1,57 +1,52 @@
 import {
+  BehaviorSubject,
   Observable,
-  bufferCount,
-  combineLatest,
+  Subject,
+  combineLatestWith,
   concatMap,
-  distinctUntilChanged,
+  connect,
   filter,
+  finalize,
+  from,
+  last,
   map,
   pairwise,
-  pipe,
-  shareReplay,
   startWith,
+  switchMap,
   switchScan,
   takeUntil,
-  tap,
 } from "rxjs";
 
-export interface Strategy<T> {
-  passFn: (word: T, input: string) => boolean;
-  repeatCount: number;
-}
-
-export function getWordByStep<T>(
-  word$: Observable<T>,
-  input$: Observable<string>,
-  { passFn, repeatCount = 1 }: Strategy<T>,
-  {
-    onPass,
-  }: Partial<{
-    onPass: (word: T) => void;
-  }> = {}
-) {
-  return word$.pipe(
-    concatMap((word) =>
-      input$.pipe(
-        startWith(""),
-        map(() => word),
-        takeUntil(
-          input$.pipe(
-            filter((input) => passFn(word, input)),
-            tap(() => {
-              onPass?.(word);
-            }),
-            bufferCount(repeatCount)
-          )
-        )
+export function stepByStep<T>(notifier: (item: T) => Observable<unknown>) {
+  const finished = new Subject<void>();
+  return (items$: Observable<T[]>) =>
+    items$.pipe(
+      map(
+        (items) =>
+          (controller$: Observable<number> = new Subject()) =>
+            controller$.pipe(
+              startWith(0),
+              switchMap((i) =>
+                from(items.slice(i)).pipe(
+                  concatMap((item) =>
+                    new BehaviorSubject(item).pipe(takeUntil(notifier(item)))
+                  ),
+                  connect((sharedItem$) => {
+                    const finishSub = sharedItem$.pipe(last()).subscribe(() => {
+                      finished.next();
+                    });
+                    return sharedItem$.pipe(
+                      finalize(() => {
+                        finishSub.unsubscribe();
+                      })
+                    );
+                  })
+                )
+              ),
+              takeUntil(finished)
+            )
       )
-    ),
-    distinctUntilChanged(),
-    shareReplay({
-      bufferSize: 1,
-      refCount: true,
-    })
-  );
+    );
 }
 
 export interface InputStat {
@@ -59,40 +54,40 @@ export interface InputStat {
   incorrect: number;
 }
 
-export function getInputStat<T>(
-  steppedWord$: Observable<T>,
-  input$: Observable<string>,
-  { validator }: { validator: (word: T, input: string) => boolean },
-  {
-    onValidate,
-  }: Partial<{
-    onValidate: (valid: boolean, source: { word: T; input: string }) => void;
-  }>
-): Observable<InputStat> {
-  return steppedWord$.pipe(
-    switchScan(
-      (stat, word) =>
-        input$.pipe(
-          // 过滤回退
-          pipe(
-            startWith(""),
-            pairwise(),
-            filter(([prev, curr]) => curr.length > prev.length)
+// 过滤回退
+export function filterBackspace() {
+  return (source$: Observable<string>) =>
+    source$.pipe(
+      startWith(""),
+      pairwise(),
+      filter(([prev, curr]) => curr.length > prev.length),
+      map(([, curr]) => curr)
+    );
+}
+
+export function inputStat<T>(validFn: (item: T) => Observable<boolean>) {
+  return (source$: Observable<T>) =>
+    source$.pipe(
+      connect((sharedSource$) =>
+        sharedSource$.pipe(
+          switchScan(
+            (stat, item) =>
+              validFn(item).pipe(
+                map((valid) => {
+                  if (valid) {
+                    stat.correct++;
+                  } else {
+                    stat.incorrect++;
+                  }
+                  return stat;
+                })
+              ),
+            { correct: 0, incorrect: 0 } as InputStat
           ),
-          map(([, input]) => {
-            const valid = validator(word, input);
-            onValidate?.(valid, { word, input });
-            if (valid) {
-              stat.correct++;
-            } else {
-              stat.incorrect++;
-            }
-            return stat;
-          })
-        ),
-      { correct: 0, incorrect: 0 }
-    )
-  );
+          takeUntil(sharedSource$.pipe(last()))
+        )
+      )
+    );
 }
 
 export interface Stats {
@@ -104,21 +99,25 @@ export interface Stats {
   second: number;
 }
 
-export function getStats(
-  inputStat$: Observable<InputStat>,
-  inputSecond$: Observable<number>
-): Observable<Stats> {
-  return combineLatest([inputStat$, inputSecond$]).pipe(
-    map(([{ correct, incorrect }, second]) => {
-      const totalInputCount = correct + incorrect;
-      return {
-        correctInputCount: correct,
-        incorrectInputCount: incorrect,
-        totalInputCount,
-        wpm: Math.floor(correct / 5 / ((second || 0.5) / 60)),
-        correctRate: correct / totalInputCount,
-        second,
-      };
-    })
-  );
+export function stats(inputSecond$: Observable<number>) {
+  return (source$: Observable<InputStat>) =>
+    source$.pipe(
+      connect((sharedSource$) =>
+        sharedSource$.pipe(
+          combineLatestWith(inputSecond$),
+          map(([{ correct, incorrect }, second]) => {
+            const totalInputCount = correct + incorrect;
+            return {
+              correctInputCount: correct,
+              incorrectInputCount: incorrect,
+              totalInputCount,
+              wpm: Math.floor(correct / 5 / ((second || 0.5) / 60)),
+              correctRate: correct / totalInputCount,
+              second,
+            } as Stats;
+          }),
+          takeUntil(sharedSource$.pipe(last()))
+        )
+      )
+    );
 }

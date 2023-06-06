@@ -1,19 +1,24 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import {
-  delay,
+  BehaviorSubject,
+  Subject,
+  bufferCount,
   filter,
-  from,
   fromEvent,
   interval,
+  map,
+  merge,
   scan,
-  shareReplay,
+  switchMap,
+  tap,
   timer,
 } from "rxjs";
-import { Stats, getInputStat, getStats, getWordByStep } from "./core";
+import { Stats, filterBackspace, inputStat, stats, stepByStep } from "./core";
+import { Word, getPaginatedItems } from "./dictionary";
 import "./theme-change";
 
 const mainEl = document.querySelector("main")!;
-const wordInputEl = document.querySelector<HTMLInputElement>("#word-input")!;
+const inputEl = document.querySelector<HTMLInputElement>("#word-input")!;
 const wordEl = document.querySelector<HTMLSpanElement>("#word")!;
 const statsEl = document.querySelector<HTMLUListElement>("#stats")!;
 const timingCountdown = statsEl.querySelector<HTMLElement>("#time .countdown")!;
@@ -30,64 +35,81 @@ const correctRateCounterEl = statsEl.querySelector<HTMLElement>(
 )!;
 const wpmCounterEl = statsEl.querySelector<HTMLElement>("#wpm .counter")!;
 
-const word$ = from(["Hello", "Qwerty", "Learner"]);
-
 const userInput$ = fromEvent(
-  wordInputEl,
+  inputEl,
   "input",
   ({ target }) => (<HTMLInputElement>target).value
 );
-
 const inputSecond$ = interval(1000).pipe(
-  filter(() => wordInputEl === document.activeElement),
-  scan((sec) => ++sec, 0),
-  shareReplay({
-    bufferSize: 1,
-    refCount: true,
-  })
+  filter(() => inputEl === document.activeElement),
+  scan((sec) => ++sec, 0)
 );
 
-const steppedWord$ = getWordByStep(
-  word$,
-  userInput$,
-  { passFn: (word, input) => word === input, repeatCount: 3 },
-  {
-    onPass() {
-      timer(200).subscribe(() => {
-        resetInput();
-      });
-    },
-  }
+const words$ = new BehaviorSubject<Word[]>([]);
+
+getPaginatedItems<Word>("CET-4", 0, 20).subscribe((words) =>
+  words$.next(words)
 );
 
-const inputStat$ = getInputStat(
-  steppedWord$,
-  userInput$,
-  { validator: (word, input) => word.startsWith(input) },
-  {
-    onValidate(valid) {
-      if (!valid)
-        timer(200).subscribe(() => {
-          resetInput();
-        });
-    },
-  }
-);
+const skip$ = new Subject<void>();
+const jump$ = new Subject<number>();
 
-const stats$ = getStats(inputStat$, inputSecond$);
+words$
+  .pipe(
+    stepByStep(({ word }) =>
+      merge(
+        userInput$.pipe(
+          filter((input) => word === input),
+          tap(() => {
+            timer(200).subscribe(() => {
+              resetInput();
+            });
+          }),
+          bufferCount(1)
+        ),
+        skip$
+      )
+    ),
+    switchMap((steppedWordFn) =>
+      steppedWordFn(jump$)
+        .pipe(
+          tap(({ word }) => {
+            timer(200).subscribe(() => {
+              renderWord(word);
+              inputEl.value = "";
+              inputEl.maxLength = word.length;
+            });
+          })
+        )
+        .pipe(
+          inputStat(({ word }) =>
+            userInput$.pipe(
+              filterBackspace(),
+              map((input) => word.startsWith(input)),
+              tap((valid) => {
+                if (!valid) {
+                  timer(200).subscribe(() => {
+                    resetInput();
+                  });
+                }
+              })
+            )
+          )
+        )
+        .pipe(stats(inputSecond$.pipe(tap(updateClock))), tap(updateStats))
+    )
+  )
+  .subscribe();
 
-steppedWord$.pipe(delay(200)).subscribe(renderWord);
 userInput$.subscribe(highlightChar);
-inputSecond$.subscribe(renderTime);
-stats$.subscribe(renderStats);
 
 fromEvent(mainEl, "focus").subscribe(() => {
-  wordInputEl.focus();
+  inputEl.focus();
 });
 
 function resetInput() {
-  wordInputEl.value = "";
-  wordInputEl.dispatchEvent(new Event("input"));
+  inputEl.value = "";
+  inputEl.dispatchEvent(new Event("input"));
 }
 
 function renderWord(word: string) {
@@ -98,8 +120,6 @@ function renderWord(word: string) {
       return spanEl;
     })
   );
-  wordInputEl.value = "";
-  wordInputEl.maxLength = word.length;
 }
 
 function highlightChar(input: string) {
@@ -121,12 +141,12 @@ function highlightChar(input: string) {
   }
 }
 
-function renderTime(second: number) {
+function updateClock(second: number) {
   minuteEl.style.setProperty("--value", Math.floor(second / 60) + "");
   secondEl.style.setProperty("--value", (second % 60) + "");
 }
 
-function renderStats({
+function updateStats({
   wpm,
   totalInputCount,
   correctInputCount,
